@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Persona, ConversationMode, Message } from '../types';
-import { createChatSession, getNextTurn, generateSpeech } from '../services/geminiService';
+import { createChatSession, getNextTurn, generateSpeech, initializeAi } from '../services/geminiService';
 import { getAudioBuffer } from '../utils/audioUtils';
 import MessageBubble from './MessageBubble';
 import Spinner from './Spinner';
@@ -10,10 +10,11 @@ interface ConversationViewProps {
   personas: Persona[];
   topic: string;
   mode: ConversationMode;
+  apiKey: string;
   onEnd: () => void;
 }
 
-const ConversationView: React.FC<ConversationViewProps> = ({ personas, topic, mode, onEnd }) => {
+const ConversationView: React.FC<ConversationViewProps> = ({ personas, topic, mode, apiKey, onEnd }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isThinking, setIsThinking] = useState(true);
   const [isPaused, setIsPaused] = useState(false);
@@ -101,6 +102,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({ personas, topic, mo
 
     } catch (error) {
       console.error("Error getting next turn:", error);
+      alert(`An error occurred: ${error instanceof Error ? error.message : 'Unknown error'}. Your API key might be invalid or have billing issues. Pausing conversation.`);
       setIsPaused(true); // Pause on error
     } finally {
       if(!conversationStoppedRef.current) {
@@ -121,6 +123,14 @@ const ConversationView: React.FC<ConversationViewProps> = ({ personas, topic, mo
 
   useEffect(() => {
     conversationStoppedRef.current = false;
+    try {
+      initializeAi(apiKey);
+    } catch(e) {
+      alert(e instanceof Error ? e.message : "An unknown error occurred during initialization.");
+      onEnd();
+      return;
+    }
+    
     audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
     chatRef.current = createChatSession(personas, topic, mode);
     fetchAndProcessTurn();

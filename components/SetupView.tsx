@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Persona, ConversationMode } from '../types';
 import { PERSONAS } from '../constants/personas';
 import { SUGGESTED_TOPICS } from '../constants/topics';
@@ -6,13 +6,27 @@ import PersonaCard from './PersonaCard';
 import AgeConfirmationModal from './AgeConfirmationModal';
 
 interface SetupViewProps {
-  onStart: (personas: Persona[], topic: string, mode: ConversationMode) => void;
+  onStart: (personas: Persona[], topic: string, mode: ConversationMode, apiKey: string) => void;
 }
 
 const SetupView: React.FC<SetupViewProps> = ({ onStart }) => {
   const [selectedPersonas, setSelectedPersonas] = useState<Persona[]>([]);
   const [topic, setTopic] = useState('');
+  const [apiKey, setApiKey] = useState('');
   const [showAgeModal, setShowAgeModal] = useState(false);
+
+  useEffect(() => {
+    const savedKey = localStorage.getItem('gemini_api_key');
+    if (savedKey) {
+      setApiKey(savedKey);
+    }
+  }, []);
+
+  const handleApiKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const key = e.target.value;
+    setApiKey(key);
+    localStorage.setItem('gemini_api_key', key);
+  };
 
   const handlePersonaSelect = (persona: Persona) => {
     setSelectedPersonas(prev => {
@@ -33,23 +47,25 @@ const SetupView: React.FC<SetupViewProps> = ({ onStart }) => {
   };
 
   const handleStart = (mode: ConversationMode, requiredTopic: boolean = true) => {
+    if (!apiKey.trim()) return;
     if (requiredTopic && !topic.trim()) return;
     if (selectedPersonas.length < 2) return;
 
     if (mode === 'vulgar_roast') {
       setShowAgeModal(true);
     } else {
-      onStart(selectedPersonas, topic, mode);
+      onStart(selectedPersonas, topic, mode, apiKey);
     }
   };
 
   const handleAgeConfirm = () => {
     setShowAgeModal(false);
-    onStart(selectedPersonas, "18+ Roast Battle", 'vulgar_roast');
+    onStart(selectedPersonas, "18+ Roast Battle", 'vulgar_roast', apiKey);
   };
 
   const selectionValid = selectedPersonas.length >= 2 && selectedPersonas.length <= 4;
   const topicSet = !!topic.trim();
+  const apiKeySet = !!apiKey.trim();
 
   return (
     <div className="container mx-auto p-4 md:p-8 min-h-screen flex flex-col">
@@ -66,6 +82,26 @@ const SetupView: React.FC<SetupViewProps> = ({ onStart }) => {
       </header>
 
       <div className="flex-grow">
+
+        <section className="mb-8 p-4 bg-brand-surface rounded-lg border border-gray-700">
+           <h2 className="text-xl font-semibold mb-3 text-gray-300">Your Gemini API Key</h2>
+           <div className="flex flex-col sm:flex-row gap-4">
+              <input
+                type="password"
+                value={apiKey}
+                onChange={handleApiKeyChange}
+                placeholder="Enter your Google Gemini API Key"
+                className="flex-grow bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-brand-primary"
+              />
+           </div>
+            <p className="text-sm text-gray-500 mt-2">
+                Your key is stored in your browser's local storage and is never sent to our servers. 
+                <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-brand-primary hover:underline ml-1">
+                    Get a key from Google AI Studio.
+                </a>
+            </p>
+        </section>
+
         <section className="mb-6">
           <h2 className="text-2xl font-semibold mb-4 text-gray-300">1. Select 2 to 4 Combatants</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
@@ -115,21 +151,21 @@ const SetupView: React.FC<SetupViewProps> = ({ onStart }) => {
           <div className="flex flex-wrap gap-4">
             <button
               onClick={() => handleStart('banter')}
-              disabled={!selectionValid || !topicSet}
+              disabled={!selectionValid || !topicSet || !apiKeySet}
               className="px-8 py-4 text-lg font-bold bg-blue-600 hover:bg-blue-700 rounded-lg transition-all disabled:bg-gray-700 disabled:cursor-not-allowed disabled:text-gray-400"
             >
               Start Banter
             </button>
             <button
               onClick={() => handleStart('roast', false)}
-              disabled={!selectionValid}
+              disabled={!selectionValid || !apiKeySet}
               className="px-8 py-4 text-lg font-bold bg-orange-600 hover:bg-orange-700 rounded-lg transition-all disabled:bg-gray-700 disabled:cursor-not-allowed disabled:text-gray-400"
             >
               Instant Roast
             </button>
              <button
               onClick={() => handleStart('vulgar_roast', false)}
-              disabled={!selectionValid}
+              disabled={!selectionValid || !apiKeySet}
               className="px-8 py-4 text-lg font-bold bg-red-700 hover:bg-red-800 rounded-lg transition-all disabled:bg-gray-700 disabled:cursor-not-allowed disabled:text-gray-400"
             >
               18+ Vulgar Roast

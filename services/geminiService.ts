@@ -3,12 +3,16 @@ import { Persona } from '../types';
 
 let ai: GoogleGenAI | null = null;
 
-const getAi = () => {
+export const initializeAi = (apiKey: string) => {
+  if (!apiKey) {
+    throw new Error("API Key is missing. Please provide a valid Gemini API key.");
+  }
+  ai = new GoogleGenAI({ apiKey });
+};
+
+const getAi = (): GoogleGenAI => {
   if (!ai) {
-    if (!process.env.API_KEY) {
-      throw new Error("API_KEY environment variable not set");
-    }
-    ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    throw new Error("AI Service not initialized. Please call initializeAi(apiKey) before using the service.");
   }
   return ai;
 };

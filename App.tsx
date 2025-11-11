@@ -12,10 +12,11 @@ const App: React.FC = () => {
     personas: Persona[],
     topic: string,
     mode: ConversationMode,
+    apiKey: string,
   } | null>(null);
 
-  const startConversation = useCallback((personas: Persona[], topic: string, mode: ConversationMode) => {
-    setConversationConfig({ personas, topic, mode });
+  const startConversation = useCallback((personas: Persona[], topic: string, mode: ConversationMode, apiKey: string) => {
+    setConversationConfig({ personas, topic, mode, apiKey });
     setView('conversation');
   }, []);
 
