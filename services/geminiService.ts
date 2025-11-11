@@ -69,11 +69,15 @@ export const createChatSession = (personas: Persona[], topic: string, mode: 'ban
   });
 };
 
-export const getNextTurn = async (chat: Chat, lastMessage: string, currentPersona: Persona, otherPersonas: Persona[]): Promise<GenerateContentResponse> => {
-  let prompt = `It's now ${currentPersona.name}'s turn. The last thing said was: "${lastMessage}". Respond as ${currentPersona.name}.`;
-
-  if (otherPersonas.length > 1) {
+export const getNextTurn = async (chat: Chat, lastMessage: string, currentPersona: Persona, otherPersonas: Persona[], isFirstTurn?: boolean): Promise<GenerateContentResponse> => {
+  let prompt: string;
+  
+  if (isFirstTurn) {
+    prompt = `[SYSTEM NOTE: ${currentPersona.name} has just joined the conversation. Their personality is: ${currentPersona.systemInstruction}]. It is now ${currentPersona.name}'s turn. The last thing said was: "${lastMessage}". Introduce yourself and respond as ${currentPersona.name}.`;
+  } else if (otherPersonas.length > 1) {
     prompt = `It's now ${currentPersona.name}'s turn. The last thing said was: "${lastMessage}". Respond to the others as ${currentPersona.name}.`;
+  } else {
+    prompt = `It's now ${currentPersona.name}'s turn. The last thing said was: "${lastMessage}". Respond as ${currentPersona.name}.`;
   }
   
   return await chat.sendMessage({ message: prompt });

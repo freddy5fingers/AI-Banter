@@ -4,6 +4,7 @@ import { createChatSession, getNextTurn, generateSpeech, initializeAi } from '..
 import { getAudioBuffer } from '../utils/audioUtils';
 import MessageBubble from './MessageBubble';
 import Spinner from './Spinner';
+import AddCharacterModal from './AddCharacterModal';
 import type { Chat } from '@google/genai';
 
 interface ConversationViewProps {
@@ -15,11 +16,14 @@ interface ConversationViewProps {
 }
 
 const ConversationView: React.FC<ConversationViewProps> = ({ personas, topic, mode, apiKey, onEnd }) => {
+  const [currentPersonas, setCurrentPersonas] = useState<Persona[]>(personas);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isThinking, setIsThinking] = useState(true);
   const [isPaused, setIsPaused] = useState(false);
   const [isSoundOn, setIsSoundOn] = useState(true);
   const [activeSpeakerId, setActiveSpeakerId] = useState<string | null>(null);
+  const [showAddCharacterModal, setShowAddCharacterModal] = useState(false);
+  const [spokenPersonaIds, setSpokenPersonaIds] = useState<Set<string>>(() => new Set(personas.map(p => p.id)));
 
   const chatRef = useRef<Chat | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -71,15 +75,20 @@ const ConversationView: React.FC<ConversationViewProps> = ({ personas, topic, mo
     setIsThinking(true);
     
     const lastMessage = messages.length > 0 ? messages[messages.length - 1].text : topic;
-    const currentPersonaIndex = messages.length % personas.length;
-    const currentPersona = personas[currentPersonaIndex];
-    const otherPersonas = personas.filter(p => p.id !== currentPersona.id);
+    const currentPersonaIndex = messages.length % currentPersonas.length;
+    const currentPersona = currentPersonas[currentPersonaIndex];
+    const otherPersonas = currentPersonas.filter(p => p.id !== currentPersona.id);
+    const isFirstTurn = !spokenPersonaIds.has(currentPersona.id);
     
     try {
       if (!chatRef.current) return;
-      const response = await getNextTurn(chatRef.current, lastMessage, currentPersona, otherPersonas);
+      const response = await getNextTurn(chatRef.current, lastMessage, currentPersona, otherPersonas, isFirstTurn);
       const text = response.text;
       
+      if (isFirstTurn) {
+        setSpokenPersonaIds(prev => new Set(prev).add(currentPersona.id));
+      }
+
       if (conversationStoppedRef.current) return;
       
       let audioBuffer: AudioBuffer | undefined = undefined;
@@ -109,7 +118,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({ personas, topic, mo
         setIsThinking(false);
       }
     }
-  }, [messages, topic, isPaused, isSoundOn, playAudio, processAudioQueue, personas]);
+  }, [messages, topic, isPaused, isSoundOn, playAudio, processAudioQueue, currentPersonas, spokenPersonaIds]);
 
   useEffect(() => {
     if(!isThinking && !isPaused && !conversationStoppedRef.current) {
@@ -158,7 +167,12 @@ const ConversationView: React.FC<ConversationViewProps> = ({ personas, topic, mo
       });
   }
   
-  const personaNames = personas.map(p => p.name);
+  const handleAddCharacter = (persona: Persona) => {
+    setCurrentPersonas(prev => [...prev, persona]);
+    setShowAddCharacterModal(false);
+  };
+  
+  const personaNames = currentPersonas.map(p => p.name);
   let title = '';
   if (personaNames.length <= 2) {
       title = personaNames.join(' vs ');
@@ -168,6 +182,14 @@ const ConversationView: React.FC<ConversationViewProps> = ({ personas, topic, mo
 
 
   return (
+    <>
+    {showAddCharacterModal && (
+        <AddCharacterModal
+          currentPersonas={currentPersonas}
+          onSelect={handleAddCharacter}
+          onClose={() => setShowAddCharacterModal(false)}
+        />
+      )}
     <div className="flex flex-col h-screen bg-brand-bg p-4">
       <header className="flex-shrink-0 mb-4">
         <h2 className="text-xl text-center font-semibold text-gray-300">
@@ -200,12 +222,20 @@ const ConversationView: React.FC<ConversationViewProps> = ({ personas, topic, mo
             <button onClick={() => setIsPaused(!isPaused)} className={`px-4 py-2 rounded-lg transition-colors ${isPaused ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-gray-600 hover:bg-gray-700'}`}>
                 {isPaused ? 'Resume' : 'Pause'}
             </button>
+            <button 
+              onClick={() => setShowAddCharacterModal(true)}
+              disabled={currentPersonas.length >= 4}
+              className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 transition-colors disabled:bg-gray-700 disabled:cursor-not-allowed disabled:text-gray-400 font-semibold"
+            >
+              Add Character
+            </button>
              <button onClick={handleStop} className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 transition-colors">
                 New Topic
             </button>
         </div>
       </footer>
     </div>
+    </>
   );
 };
 
