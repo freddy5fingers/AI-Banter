@@ -1,0 +1,5 @@
+{
+  "name": "Podcast Roast",
+  "description": "A web application that simulates debates and conversations between two AI-powered personas. Users select characters, provide a topic, and watch as the AIs generate a back-and-forth dialogue in real-time with unique, AI-generated voices.",
+  "requestFramePermissions": []
+}
