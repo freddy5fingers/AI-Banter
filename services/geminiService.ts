@@ -10,6 +10,23 @@ export const initializeAi = (apiKey: string) => {
   ai = new GoogleGenAI({ apiKey });
 };
 
+export const validateApiKey = async (key: string): Promise<boolean> => {
+  if (!key.trim()) return false;
+  try {
+    const tempAi = new GoogleGenAI({ apiKey: key });
+    // Make a lightweight call to check for authentication errors.
+    await tempAi.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: 'hi',
+    });
+    return true;
+  } catch (error) {
+    // Log error for debugging but return false for the UI
+    console.error("API Key validation failed:", error);
+    return false;
+  }
+};
+
 const getAi = (): GoogleGenAI => {
   if (!ai) {
     throw new Error("AI Service not initialized. Please call initializeAi(apiKey) before using the service.");
