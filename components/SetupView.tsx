@@ -23,6 +23,18 @@ const SetupView: React.FC<SetupViewProps> = ({ onStart }) => {
     const savedKey = localStorage.getItem('gemini_api_key');
     if (savedKey) {
       setApiKeyInput(savedKey);
+      const autoValidate = async (key: string) => {
+        setKeyValidationStatus('validating');
+        const isValid = await validateApiKey(key);
+        if (isValid) {
+          setKeyValidationStatus('valid');
+          setApiKey(key);
+        } else {
+          setKeyValidationStatus('idle');
+          localStorage.removeItem('gemini_api_key');
+        }
+      };
+      autoValidate(savedKey);
     }
   }, []);
 
@@ -48,6 +60,11 @@ const SetupView: React.FC<SetupViewProps> = ({ onStart }) => {
       setApiKey('');
       localStorage.removeItem('gemini_api_key');
     }
+  };
+
+  const handleResetKey = () => {
+    setKeyValidationStatus('idle');
+    setApiKey('');
   };
 
   const handlePersonaSelect = (persona: Persona) => {
@@ -105,42 +122,52 @@ const SetupView: React.FC<SetupViewProps> = ({ onStart }) => {
 
       <div className="flex-grow">
         <section className="mb-8 p-4 bg-brand-surface rounded-lg border border-gray-700">
-           <h2 className="text-xl font-semibold mb-3 text-gray-300">Your Gemini API Key</h2>
-            <div className="flex flex-col sm:flex-row gap-4 items-start">
-              <div className="flex-grow">
-                <div className="flex gap-2">
-                  <input
-                    type="password"
-                    value={apiKeyInput}
-                    onChange={handleApiKeyInputChange}
-                    placeholder="Enter your Google Gemini API Key"
-                    className="flex-grow bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-brand-primary"
-                  />
-                  <button
-                    onClick={handleVerifyKey}
-                    disabled={!apiKeyInput.trim() || keyValidationStatus === 'validating'}
-                    className="px-4 py-3 bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors font-semibold flex items-center gap-2 disabled:bg-gray-600 disabled:cursor-not-allowed"
-                  >
-                    {keyValidationStatus === 'validating' ? <Spinner /> : null}
-                    <span>{keyValidationStatus === 'valid' ? 'Key Saved' : 'Save & Verify'}</span>
-                  </button>
-                </div>
-                <div className="h-5 mt-2">
-                  {keyValidationStatus === 'valid' && (
-                    <p className="text-sm text-green-400 animate-fade-in">✓ API Key is valid and saved.</p>
-                  )}
-                  {keyValidationStatus === 'invalid' && (
-                    <p className="text-sm text-red-400 animate-fade-in">✗ Invalid API Key. Please check the key and your Google Cloud billing status.</p>
-                  )}
+          <h2 className="text-xl font-semibold mb-3 text-gray-300">Your Gemini API Key</h2>
+          {keyValidationStatus === 'valid' ? (
+             <div className="flex items-center gap-4">
+                <p className="flex-grow text-green-400 animate-fade-in">✓ API Key is valid and saved.</p>
+                <button
+                  onClick={handleResetKey}
+                  className="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors font-semibold"
+                >
+                  Change Key
+                </button>
+              </div>
+          ) : (
+            <div>
+              <div className="flex flex-col sm:flex-row gap-4 items-start">
+                <div className="flex-grow">
+                  <div className="flex gap-2">
+                    <input
+                      type="password"
+                      value={apiKeyInput}
+                      onChange={handleApiKeyInputChange}
+                      placeholder="Enter your Google Gemini API Key"
+                      className="flex-grow bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                    />
+                    <button
+                      onClick={handleVerifyKey}
+                      disabled={!apiKeyInput.trim() || keyValidationStatus === 'validating'}
+                      className="px-4 py-3 bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors font-semibold flex items-center gap-2 disabled:bg-gray-600 disabled:cursor-not-allowed"
+                    >
+                      {keyValidationStatus === 'validating' ? <Spinner /> : <span>Save & Verify</span>}
+                    </button>
+                  </div>
+                  <div className="h-5 mt-2">
+                    {keyValidationStatus === 'invalid' && (
+                      <p className="text-sm text-red-400 animate-fade-in">✗ Invalid API Key. Please check the key and your Google Cloud billing status.</p>
+                    )}
+                  </div>
                 </div>
               </div>
+              <p className="text-sm text-gray-500 mt-2">
+                  Your key is stored in your browser's local storage and is never sent to our servers. 
+                  <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-brand-primary hover:underline ml-1">
+                      Get a key from Google AI Studio.
+                  </a>
+              </p>
             </div>
-            <p className="text-sm text-gray-500 mt-2">
-                Your key is stored in your browser's local storage and is never sent to our servers. 
-                <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-brand-primary hover:underline ml-1">
-                    Get a key from Google AI Studio.
-                </a>
-            </p>
+          )}
         </section>
 
         <section className="mb-6">
