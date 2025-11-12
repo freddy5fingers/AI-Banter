@@ -3,6 +3,33 @@ import { Persona } from '../types';
 
 let ai: GoogleGenAI | null = null;
 
+const withRetry = async <T>(apiCall: () => Promise<T>, maxRetries = 3): Promise<T> => {
+  let attempt = 0;
+  while (attempt < maxRetries) {
+    try {
+      return await apiCall();
+    } catch (error) {
+      attempt++;
+      if (attempt >= maxRetries) {
+        throw error; // Re-throw the error on the final attempt
+      }
+      
+      const isNetworkError = error instanceof Error && (error.message.toLowerCase().includes('fetch') || error.name === 'TypeError');
+
+      if (isNetworkError) {
+        const delay = Math.pow(2, attempt) * 1000; // Exponential backoff: 2s, 4s, etc.
+        console.warn(`API call failed with network error (attempt ${attempt}/${maxRetries}). Retrying in ${delay}ms...`, error);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      } else {
+        throw error; // Don't retry for non-network errors (e.g., auth)
+      }
+    }
+  }
+  // This line should be unreachable due to the throws inside the loop
+  throw new Error('Retry logic exited unexpectedly.');
+};
+
+
 export const initializeAi = (apiKey: string) => {
   if (!apiKey) {
     throw new Error("API Key is missing. Please provide a valid Gemini API key.");
@@ -14,14 +41,12 @@ export const validateApiKey = async (key: string): Promise<boolean> => {
   if (!key.trim()) return false;
   try {
     const tempAi = new GoogleGenAI({ apiKey: key });
-    // Make a lightweight call to check for authentication errors.
-    await tempAi.models.generateContent({
+    await withRetry(() => tempAi.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: 'hi',
-    });
+    }));
     return true;
   } catch (error) {
-    // Log error for debugging but return false for the UI
     console.error("API Key validation failed:", error);
     return false;
   }
@@ -80,14 +105,14 @@ export const getNextTurn = async (chat: Chat, lastMessage: string, currentPerson
     prompt = `It's now ${currentPersona.name}'s turn. The last thing said was: "${lastMessage}". Respond as ${currentPersona.name}.`;
   }
   
-  return await chat.sendMessage({ message: prompt });
+  return await withRetry(() => chat.sendMessage({ message: prompt }));
 };
 
 export const generateSpeech = async (text: string, persona: Persona): Promise<GenerateContentResponse | null> => {
   const ai = getAi();
   try {
     const prompt = `${persona.voiceInstruction} "${text}"`;
-    const response = await ai.models.generateContent({
+    const response = await withRetry(() => ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
       contents: [{ parts: [{ text: prompt }] }],
       config: {
@@ -98,7 +123,7 @@ export const generateSpeech = async (text: string, persona: Persona): Promise<Ge
           },
         },
       },
-    });
+    }));
     return response;
   } catch (error) {
     console.error("Error generating speech:", error);

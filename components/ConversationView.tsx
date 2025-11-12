@@ -24,6 +24,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({ personas, topic, mo
   const [activeSpeakerId, setActiveSpeakerId] = useState<string | null>(null);
   const [showAddCharacterModal, setShowAddCharacterModal] = useState(false);
   const [spokenPersonaIds, setSpokenPersonaIds] = useState<Set<string>>(() => new Set(personas.map(p => p.id)));
+  const [error, setError] = useState<string | null>(null);
 
   const chatRef = useRef<Chat | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -31,12 +32,13 @@ const ConversationView: React.FC<ConversationViewProps> = ({ personas, topic, mo
   const isPlayingAudioRef = useRef(false);
   const conversationStoppedRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const turnTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, error]);
 
   const processAudioQueue = useCallback(async () => {
     if (isPlayingAudioRef.current || audioQueueRef.current.length === 0) {
@@ -73,6 +75,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({ personas, topic, mo
     if (conversationStoppedRef.current || isPaused) return;
 
     setIsThinking(true);
+    setError(null);
     
     const lastMessage = messages.length > 0 ? messages[messages.length - 1].text : topic;
     const currentPersonaIndex = messages.length % currentPersonas.length;
@@ -111,8 +114,9 @@ const ConversationView: React.FC<ConversationViewProps> = ({ personas, topic, mo
 
     } catch (error) {
       console.error("Error getting next turn:", error);
-      alert(`An error occurred: ${error instanceof Error ? error.message : 'Unknown error'}. Your API key might be invalid or have billing issues. Pausing conversation.`);
-      setIsPaused(true); // Pause on error
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      setError(`An API error occurred: "${errorMessage}". This could be a network issue or a problem with your API key. The conversation is paused.`);
+      setIsPaused(true);
     } finally {
       if(!conversationStoppedRef.current) {
         setIsThinking(false);
@@ -121,13 +125,16 @@ const ConversationView: React.FC<ConversationViewProps> = ({ personas, topic, mo
   }, [messages, topic, isPaused, isSoundOn, playAudio, processAudioQueue, currentPersonas, spokenPersonaIds]);
 
   useEffect(() => {
-    if(!isThinking && !isPaused && !conversationStoppedRef.current) {
-        const timer = setTimeout(() => {
+    if(!isThinking && !isPaused && !conversationStoppedRef.current && !error) {
+        if (turnTimerRef.current) clearTimeout(turnTimerRef.current);
+        turnTimerRef.current = setTimeout(() => {
             fetchAndProcessTurn();
-        }, 2000); // 2 second delay between turns
-        return () => clearTimeout(timer);
+        }, 3000); // 3 second delay between turns
+        return () => {
+            if (turnTimerRef.current) clearTimeout(turnTimerRef.current);
+        };
     }
-  }, [isThinking, isPaused, fetchAndProcessTurn]);
+  }, [isThinking, isPaused, error, fetchAndProcessTurn]);
 
 
   useEffect(() => {
@@ -146,6 +153,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({ personas, topic, mo
 
     return () => {
       conversationStoppedRef.current = true;
+      if (turnTimerRef.current) clearTimeout(turnTimerRef.current);
       audioContextRef.current?.close();
       audioQueueRef.current = [];
       isPlayingAudioRef.current = false;
@@ -155,8 +163,16 @@ const ConversationView: React.FC<ConversationViewProps> = ({ personas, topic, mo
 
   const handleStop = () => {
     conversationStoppedRef.current = true;
+    if (turnTimerRef.current) clearTimeout(turnTimerRef.current);
     onEnd();
   }
+  
+  const handleNextRound = useCallback(() => {
+    if (turnTimerRef.current) {
+      clearTimeout(turnTimerRef.current);
+    }
+    fetchAndProcessTurn();
+  }, [fetchAndProcessTurn]);
 
   const toggleSound = () => {
       setIsSoundOn(prev => {
@@ -165,6 +181,15 @@ const ConversationView: React.FC<ConversationViewProps> = ({ personas, topic, mo
           }
           return !prev;
       });
+  }
+
+  const togglePause = () => {
+    setIsPaused(prev => {
+        if (prev) { // If it was paused and we are resuming
+            setError(null); // Clear any existing error
+        }
+        return !prev;
+    });
   }
   
   const handleAddCharacter = (persona: Persona) => {
@@ -212,15 +237,29 @@ const ConversationView: React.FC<ConversationViewProps> = ({ personas, topic, mo
             <span className="text-gray-400">AI is thinking...</span>
           </div>
         )}
+        {error && (
+          <div className="p-4 my-2 bg-red-900/50 border border-red-500 rounded-lg text-red-300 animate-fade-in">
+            <p className="font-bold text-lg mb-1">Conversation Paused</p>
+            <p>{error}</p>
+          </div>
+        )}
       </div>
 
       <footer className="flex-shrink-0 mt-4 p-2 bg-brand-surface rounded-lg">
         <div className="flex justify-center items-center flex-wrap gap-2">
-            <button onClick={toggleSound} className={`px-4 py-2 rounded-lg transition-colors ${isSoundOn ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-600 hover:bg-gray-700'}`}>
-                {isSoundOn ? 'Sound ON' : 'Sound OFF'}
-            </button>
-            <button onClick={() => setIsPaused(!isPaused)} className={`px-4 py-2 rounded-lg transition-colors ${isPaused ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-gray-600 hover:bg-gray-700'}`}>
+            {!isThinking && !isPaused && (
+                 <button 
+                    onClick={handleNextRound} 
+                    className="px-6 py-3 font-bold text-white bg-gradient-to-r from-red-600 to-orange-500 rounded-lg shadow-lg transform transition-transform hover:scale-105 animate-fade-in"
+                >
+                    Next Round!
+                </button>
+            )}
+            <button onClick={togglePause} className={`px-4 py-2 rounded-lg transition-colors font-semibold ${isPaused ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-gray-600 hover:bg-gray-700'}`}>
                 {isPaused ? 'Resume' : 'Pause'}
+            </button>
+            <button onClick={toggleSound} className={`px-4 py-2 rounded-lg transition-colors font-semibold ${isSoundOn ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-600 hover:bg-gray-700'}`}>
+                {isSoundOn ? 'Sound ON' : 'Sound OFF'}
             </button>
             <button 
               onClick={() => setShowAddCharacterModal(true)}
@@ -229,8 +268,8 @@ const ConversationView: React.FC<ConversationViewProps> = ({ personas, topic, mo
             >
               Add Character
             </button>
-             <button onClick={handleStop} className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 transition-colors">
-                New Topic
+             <button onClick={handleStop} className="px-4 py-2 rounded-lg bg-red-700 hover:bg-red-800 transition-colors font-semibold">
+                End Conversation
             </button>
         </div>
       </footer>
