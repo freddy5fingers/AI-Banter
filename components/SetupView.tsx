@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Persona, ConversationMode } from '../types';
 import { PERSONAS } from '../constants/personas';
 import { SUGGESTED_TOPICS } from '../constants/topics';
@@ -18,6 +18,15 @@ const SetupView: React.FC<SetupViewProps> = ({ onStart }) => {
   const [apiKeyInput, setApiKeyInput] = useState(''); // The input field value
   const [keyValidationStatus, setKeyValidationStatus] = useState<'idle' | 'validating' | 'valid' | 'invalid'>('idle');
   const [showAgeModal, setShowAgeModal] = useState(false);
+  const selectSoundRef = useRef<HTMLAudioElement | null>(null);
+  const startSoundRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    selectSoundRef.current = new Audio('https://exact-teal-djfdkjzjcx.edgeone.app/clicking-interface-select-201946.mp3');
+    selectSoundRef.current.preload = 'auto';
+    startSoundRef.current = new Audio('https://main-jade-7anxvlvcma.edgeone.app/opening-bell-421471.mp3');
+    startSoundRef.current.preload = 'auto';
+  }, []);
   
   useEffect(() => {
     const savedKey = localStorage.getItem('gemini_api_key');
@@ -68,6 +77,10 @@ const SetupView: React.FC<SetupViewProps> = ({ onStart }) => {
   };
 
   const handlePersonaSelect = (persona: Persona) => {
+    if (selectSoundRef.current) {
+      selectSoundRef.current.currentTime = 0;
+      selectSoundRef.current.play().catch(e => console.error("Error playing sound:", e));
+    }
     setSelectedPersonas(prev => {
       const isSelected = prev.some(p => p.id === persona.id);
       if (isSelected) {
@@ -90,15 +103,25 @@ const SetupView: React.FC<SetupViewProps> = ({ onStart }) => {
     if (requiredTopic && !topic.trim()) return;
     if (selectedPersonas.length < 2) return;
 
+    if (startSoundRef.current) {
+      startSoundRef.current.currentTime = 0;
+      startSoundRef.current.play().catch(e => console.error("Error playing start sound:", e));
+    }
+
     if (mode === 'vulgar_roast') {
       setShowAgeModal(true);
     } else {
-      onStart(selectedPersonas, topic, mode, apiKey);
+      // Delay transition to hear the bell sound
+      setTimeout(() => {
+        onStart(selectedPersonas, topic, mode, apiKey);
+      }, 1000);
     }
   };
 
   const handleAgeConfirm = () => {
     setShowAgeModal(false);
+    // Sound was already triggered in handleStart.
+    // The modal interaction provides enough of a delay for the sound to be heard.
     onStart(selectedPersonas, "18+ Roast Battle", 'vulgar_roast', apiKey);
   };
 
